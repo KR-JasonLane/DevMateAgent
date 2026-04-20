@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DevPilotAgent.Api/DevPilotAgent.Api.csproj" />
+    <Project Path="src/DevPilotAgent.App/DevPilotAgent.App.csproj" />
+    <Project Path="src/DevPilotAgent.Application/DevPilotAgent.Application.csproj" />
+    <Project Path="src/DevPilotAgent.Domain/DevPilotAgent.Domain.csproj" />
+    <Project Path="src/DevPilotAgent.Infrastructure/DevPilotAgent.Infrastructure.csproj" />
+    <Project Path="src/DevPilotAgent.Shared/DevPilotAgent.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DevPilotAgent.Tests/DevPilotAgent.Tests.csproj" />
+  </Folder>
+</Solution>
