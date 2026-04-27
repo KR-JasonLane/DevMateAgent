@@ -1,0 +1,192 @@
+@using System.Net.Http
+@using DevPilotAgent.App.Components.Services
+@inject AnalysisApiService ApiService
+@inject AnalysisHubService HubService
+@inject AppStateService AppState
+@implements IDisposable
+
+<div class="chat-panel">
+    <!-- Input Section -->
+    <div class="input-section">
+        <textarea @bind="_errorLog" placeholder="에러 로그를 붙여넣으세요..." rows="4"
+                  disabled="@_isAnalyzing"></textarea>
+        <div class="input-actions">
+            @if (string.IsNullOrWhiteSpace(AppState.ProjectFolderPath))
+            {
+                <span class="warning-text">먼저 프로젝트 폴더를 선택하세요</span>
+            }
+            @if (_isAnalyzing)
+            {
+                <button class="btn btn-cancel" @onclick="CancelAnalysis">취소</button>
+                <span class="progress-text">단계 @_currentStep/7 진행 중</span>
+            }
+            else
+            {
+                <button class="btn btn-primary" @onclick="StartAnalysis"
+                        disabled="@(string.IsNullOrWhiteSpace(AppState.ProjectFolderPath) || string.IsNullOrWhiteSpace(_errorLog))">
+                    Analyze
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Chat Messages -->
+    <div class="chat-messages" id="chatMessages">
+        @if (_messages.Count == 0 && !_isAnalyzing)
+        {
+            <div class="empty-state">에러 로그를 입력하고 Analyze 버튼을 클릭하세요</div>
+        }
+        @foreach (var msg in _messages)
+        {
+            <div class="chat-message @msg.Role">
+                <span class="message-content">@msg.Content</span>
+            </div>
+        }
+        @foreach (var (stepNumber, text) in _streamingTexts)
+        {
+            @if (!string.IsNullOrEmpty(text))
+            {
+                <div class="chat-message streaming">
+                    <pre class="streaming-text">@text<span class="cursor">|</span></pre>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<AnalysisResponse?> OnAnalysisCompleted { get; set; }
+
+    private string _errorLog = string.Empty;
+    private bool _isAnalyzing;
+    private int _currentStep;
+    private Guid? _currentAnalysisId;
+    private readonly List<ChatMessageModel> _messages = [];
+    private readonly Dictionary<int, string> _streamingTexts = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await HubService.ConnectAsync();
+        HubService.OnAgentStepUpdate += HandleStepUpdate;
+        HubService.OnStreamChunk += HandleStreamChunk;
+        HubService.OnAnalysisCompleted += HandleCompleted;
+    }
+
+    private async Task StartAnalysis()
+    {
+        if (string.IsNullOrWhiteSpace(AppState.ProjectFolderPath) || string.IsNullOrWhiteSpace(_errorLog))
+            return;
+
+        _isAnalyzing = true;
+        _currentStep = 0;
+        _messages.Clear();
+        _streamingTexts.Clear();
+
+        try
+        {
+            var request = new AnalysisRequest(AppState.ProjectFolderPath, _errorLog);
+            var started = await ApiService.StartAnalysisAsync(request);
+            _currentAnalysisId = started.AnalysisId;
+
+            await HubService.JoinAnalysisAsync(started.AnalysisId);
+            await ApiService.TriggerAnalysisAsync(started.AnalysisId, request);
+
+            _messages.Add(new ChatMessageModel("system", "분석을 시작합니다..."));
+        }
+        catch (HttpRequestException ex)
+        {
+            _isAnalyzing = false;
+            _messages.Add(new ChatMessageModel("error", $"API 서버 연결 실패: {ex.Message}\nAPI 서버가 실행 중인지 확인하세요."));
+        }
+        catch (Exception ex)
+        {
+            _isAnalyzing = false;
+            _messages.Add(new ChatMessageModel("error", $"분석 시작 실패: {ex.Message}"));
+        }
+        StateHasChanged();
+    }
+
+    private async Task CancelAnalysis()
+    {
+        if (_currentAnalysisId.HasValue)
+        {
+            await ApiService.CancelAnalysisAsync(_currentAnalysisId.Value);
+            _isAnalyzing = false;
+            _messages.Add(new ChatMessageModel("system", "분석이 취소되었습니다."));
+            StateHasChanged();
+        }
+    }
+
+    private void HandleStepUpdate(AgentStepMessage msg)
+    {
+        if (msg.AnalysisId != _currentAnalysisId) return;
+
+        InvokeAsync(() =>
+        {
+            if (msg.Status == "Started")
+            {
+                _currentStep = msg.StepNumber;
+                _messages.Add(new ChatMessageModel("agent", $"[Step {msg.StepNumber}] {msg.Message}"));
+                _streamingTexts[msg.StepNumber] = "";
+            }
+            else if (msg.Status == "Completed")
+            {
+                _streamingTexts.Remove(msg.StepNumber);
+                _messages.Add(new ChatMessageModel("agent-done", $"[Step {msg.StepNumber}] {msg.Message}"));
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void HandleStreamChunk(StreamChunkMessage msg)
+    {
+        if (msg.AnalysisId != _currentAnalysisId) return;
+
+        InvokeAsync(() =>
+        {
+            if (!msg.IsComplete)
+            {
+                if (!_streamingTexts.ContainsKey(msg.StepNumber))
+                    _streamingTexts[msg.StepNumber] = "";
+                _streamingTexts[msg.StepNumber] += msg.Chunk;
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void HandleCompleted(AnalysisCompletedMessage msg)
+    {
+        if (msg.AnalysisId != _currentAnalysisId) return;
+
+        InvokeAsync(async () =>
+        {
+            _isAnalyzing = false;
+            _streamingTexts.Clear();
+
+            if (msg.Success)
+            {
+                _messages.Add(new ChatMessageModel("system", "분석이 완료되었습니다."));
+                var result = await ApiService.GetAnalysisAsync(msg.AnalysisId);
+                await OnAnalysisCompleted.InvokeAsync(result);
+            }
+            else
+            {
+                _messages.Add(new ChatMessageModel("error", $"분석 실패: {msg.ErrorMessage}"));
+            }
+
+            if (_currentAnalysisId.HasValue)
+                await HubService.LeaveAnalysisAsync(_currentAnalysisId.Value);
+
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        HubService.OnAgentStepUpdate -= HandleStepUpdate;
+        HubService.OnStreamChunk -= HandleStreamChunk;
+        HubService.OnAnalysisCompleted -= HandleCompleted;
+    }
+
+    private record ChatMessageModel(string Role, string Content);
+}

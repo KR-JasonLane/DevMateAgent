@@ -1,0 +1,63 @@
+@using DevPilotAgent.App.Components.Services
+@inject AnalysisApiService ApiService
+
+<div class="history-panel">
+    <h3>분석 기록</h3>
+    @if (_analyses.Count == 0)
+    {
+        <div class="empty-state">아직 분석 기록이 없습니다</div>
+    }
+    else
+    {
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>날짜</th>
+                    <th>프로젝트</th>
+                    <th>에러 로그</th>
+                    <th>상태</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _analyses)
+                {
+                    <tr @onclick="() => SelectAnalysis(item.Id)" class="clickable">
+                        <td>@item.CreatedAt.ToString("MM/dd HH:mm")</td>
+                        <td class="path-cell">@TruncatePath(item.ProjectFolderPath)</td>
+                        <td>@item.ErrorLogPreview</td>
+                        <td class="status-@item.Status.ToLower()">@item.Status</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback<AnalysisResponse?> OnAnalysisSelected { get; set; }
+
+    private List<AnalysisSummaryDto> _analyses = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHistory();
+    }
+
+    public async Task LoadHistory()
+    {
+        var result = await ApiService.ListAnalysesAsync();
+        _analyses = result.Items;
+        StateHasChanged();
+    }
+
+    private async Task SelectAnalysis(Guid id)
+    {
+        var detail = await ApiService.GetAnalysisAsync(id);
+        await OnAnalysisSelected.InvokeAsync(detail);
+    }
+
+    private static string TruncatePath(string path)
+    {
+        return path.Length > 30 ? "..." + path[^30..] : path;
+    }
+}

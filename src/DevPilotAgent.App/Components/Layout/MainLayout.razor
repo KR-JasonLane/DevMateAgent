@@ -1,0 +1,29 @@
+<div class="main-layout">
+    <div class="left-panel">
+        <ChatPanel OnAnalysisCompleted="HandleAnalysisCompleted" />
+    </div>
+    <div class="right-panel">
+        <ResultTabs Analysis="_currentAnalysis" />
+        <HistoryPanel @ref="_historyPanel" OnAnalysisSelected="HandleAnalysisSelected" />
+    </div>
+</div>
+
+@code {
+    private AnalysisResponse? _currentAnalysis;
+    private HistoryPanel? _historyPanel;
+
+    private async Task HandleAnalysisCompleted(AnalysisResponse? analysis)
+    {
+        _currentAnalysis = analysis;
+        if (_historyPanel is not null)
+            await _historyPanel.LoadHistory();
+        StateHasChanged();
+    }
+
+    private Task HandleAnalysisSelected(AnalysisResponse? analysis)
+    {
+        _currentAnalysis = analysis;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+}

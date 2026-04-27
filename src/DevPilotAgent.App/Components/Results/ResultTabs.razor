@@ -1,0 +1,132 @@
+@using DevPilotAgent.App.Components.Services
+@inject AnalysisApiService ApiService
+
+<div class="result-tabs">
+    @if (Analysis is null)
+    {
+        <div class="empty-state">분석 결과가 여기에 표시됩니다</div>
+    }
+    else
+    {
+        <div class="tab-header">
+            <button class="tab-btn @ActiveClass(0)" @onclick="() => _activeTab = 0">관련 파일</button>
+            <button class="tab-btn @ActiveClass(1)" @onclick="() => _activeTab = 1">원인 분석</button>
+            <button class="tab-btn @ActiveClass(2)" @onclick="() => _activeTab = 2">수정 제안</button>
+            <button class="tab-btn @ActiveClass(3)" @onclick="() => _activeTab = 3">테스트</button>
+            <button class="tab-btn @ActiveClass(4)" @onclick="() => _activeTab = 4">PR 설명문</button>
+        </div>
+
+        <div class="tab-content">
+            @switch (_activeTab)
+            {
+                case 0:
+                    <div class="tab-pane">
+                        @foreach (var file in Analysis.RelatedFiles)
+                        {
+                            <div class="file-item">
+                                <span class="file-path">@file.FilePath</span>
+                                <span class="file-reason">@file.MatchReason</span>
+                                <span class="file-score">@file.RelevanceScore.ToString("P0")</span>
+                            </div>
+                        }
+                    </div>
+                    break;
+                case 1:
+                    <div class="tab-pane">
+                        <div class="content-header">
+                            <button class="btn-copy" @onclick="() => CopyToClipboard(Analysis.RootCauseAnalysis)">복사</button>
+                        </div>
+                        <pre class="content-text">@Analysis.RootCauseAnalysis</pre>
+                    </div>
+                    break;
+                case 2:
+                    <div class="tab-pane">
+                        @for (var i = 0; i < Analysis.FixSuggestions.Count; i++)
+                        {
+                            var fix = Analysis.FixSuggestions[i];
+                            var idx = i;
+                            <div class="fix-item">
+                                <h4>@fix.TargetFilePath</h4>
+                                <p>@fix.Description</p>
+                                <pre class="diff-block">@FormatDiff(fix.UnifiedDiff)</pre>
+                                <button class="btn btn-apply" @onclick="() => ApplyPatch(idx, fix.TargetFilePath)">
+                                    적용
+                                </button>
+                                @if (_applyMessages.TryGetValue(idx, out var msg))
+                                {
+                                    <span class="apply-msg">@msg</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    break;
+                case 3:
+                    <div class="tab-pane">
+                        <div class="content-header">
+                            <button class="btn-copy" @onclick="() => CopyToClipboard(string.Join('\n', Analysis.TestScenarios))">복사</button>
+                        </div>
+                        <ol class="scenario-list">
+                            @foreach (var scenario in Analysis.TestScenarios)
+                            {
+                                <li>@scenario</li>
+                            }
+                        </ol>
+                    </div>
+                    break;
+                case 4:
+                    <div class="tab-pane">
+                        <div class="content-header">
+                            <button class="btn-copy" @onclick="() => CopyToClipboard(Analysis.PrDescription)">복사</button>
+                        </div>
+                        <pre class="content-text">@Analysis.PrDescription</pre>
+                    </div>
+                    break;
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public AnalysisResponse? Analysis { get; set; }
+
+    private int _activeTab;
+    private readonly Dictionary<int, string> _applyMessages = [];
+
+    private string ActiveClass(int tab) => _activeTab == tab ? "active" : "";
+
+    private static MarkupString FormatDiff(string diff)
+    {
+        var lines = diff.Split('\n');
+        var html = string.Join("", lines.Select(line =>
+        {
+            var cssClass = line.StartsWith('+') ? "diff-add" :
+                           line.StartsWith('-') ? "diff-remove" :
+                           line.StartsWith('@') ? "diff-header" : "diff-normal";
+            return $"<div class=\"{cssClass}\">{System.Net.WebUtility.HtmlEncode(line)}</div>";
+        }));
+        return new MarkupString(html);
+    }
+
+    private async Task ApplyPatch(int patchIndex, string targetFilePath)
+    {
+        if (Analysis is null) return;
+        try
+        {
+            var request = new ApplyPatchRequest(Analysis.Id, patchIndex, targetFilePath);
+            var result = await ApiService.ApplyPatchAsync(request);
+            _applyMessages[patchIndex] = result.Success ? $"적용 완료 (백업: {result.BackupFilePath})" : result.Message;
+        }
+        catch (Exception ex)
+        {
+            _applyMessages[patchIndex] = $"적용 실패: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private static Task CopyToClipboard(string text)
+    {
+        // BlazorWebView에서는 JS interop 없이 Clipboard API 사용 제한
+        // MVP: 텍스트 선택으로 대체
+        return Task.CompletedTask;
+    }
+}
