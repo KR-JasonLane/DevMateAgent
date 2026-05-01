@@ -8,7 +8,12 @@ public class AnalysisHubService : IAsyncDisposable
 {
     private HubConnection? _connection;
     private Guid? _currentAnalysisId;
-    private readonly string _hubUrl = "http://localhost:5000/hubs/analysis";
+    private readonly string _hubUrl;
+
+    public AnalysisHubService(string hubUrl)
+    {
+        _hubUrl = hubUrl;
+    }
 
     public event Action<AgentStepMessage>? OnAgentStepUpdate;
     public event Action<StreamChunkMessage>? OnStreamChunk;

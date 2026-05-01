@@ -13,14 +13,25 @@ public static class AgentServiceRegistration
     {
         var apiKey = configuration["OpenAI:ApiKey"];
         var modelId = configuration["OpenAI:ModelId"] ?? "gpt-4o";
+        var endpoint = configuration["OpenAI:Endpoint"];
 
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException(
                 "OpenAI API 키가 설정되지 않았습니다. appsettings.Development.json 또는 User Secrets에 'OpenAI:ApiKey'를 설정하세요.");
 
-        var kernel = Kernel.CreateBuilder()
-            .AddOpenAIChatCompletion(modelId, apiKey)
-            .Build();
+        var builder = Kernel.CreateBuilder();
+
+        if (!string.IsNullOrWhiteSpace(endpoint))
+        {
+            var httpClient = new HttpClient { BaseAddress = new Uri(endpoint) };
+            builder.AddOpenAIChatCompletion(modelId, apiKey, httpClient: httpClient);
+        }
+        else
+        {
+            builder.AddOpenAIChatCompletion(modelId, apiKey);
+        }
+
+        var kernel = builder.Build();
 
         services.AddSingleton(kernel);
 
