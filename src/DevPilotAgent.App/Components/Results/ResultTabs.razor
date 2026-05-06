@@ -1,5 +1,6 @@
 @using DevPilotAgent.App.Components.Services
 @inject AnalysisApiService ApiService
+@inject MarkdownService Markdown
 
 <div class="result-tabs">
     @if (Analysis is null)
@@ -36,7 +37,7 @@
                         <div class="content-header">
                             <button class="btn-copy" @onclick="() => CopyToClipboard(Analysis.RootCauseAnalysis)">복사</button>
                         </div>
-                        <pre class="content-text">@Analysis.RootCauseAnalysis</pre>
+                        <div class="markdown-body">@((MarkupString)Markdown.ToHtml(Analysis.RootCauseAnalysis))</div>
                     </div>
                     break;
                 case 2:
@@ -65,12 +66,9 @@
                         <div class="content-header">
                             <button class="btn-copy" @onclick="() => CopyToClipboard(string.Join('\n', Analysis.TestScenarios))">복사</button>
                         </div>
-                        <ol class="scenario-list">
-                            @foreach (var scenario in Analysis.TestScenarios)
-                            {
-                                <li>@scenario</li>
-                            }
-                        </ol>
+                        <div class="markdown-body">
+                            @((MarkupString)Markdown.ToHtml(string.Join("\n", Analysis.TestScenarios)))
+                        </div>
                     </div>
                     break;
                 case 4:
@@ -78,7 +76,7 @@
                         <div class="content-header">
                             <button class="btn-copy" @onclick="() => CopyToClipboard(Analysis.PrDescription)">복사</button>
                         </div>
-                        <pre class="content-text">@Analysis.PrDescription</pre>
+                        <div class="markdown-body">@((MarkupString)Markdown.ToHtml(Analysis.PrDescription))</div>
                     </div>
                     break;
             }

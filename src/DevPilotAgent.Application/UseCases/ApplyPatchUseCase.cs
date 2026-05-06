@@ -7,6 +7,10 @@ using DevPilotAgent.Shared.DTOs;
 using DevPilotAgent.Shared.Requests;
 using DevPilotAgent.Shared.Responses;
 
+/// <summary>
+/// 완료된 분석의 수정 제안을 실제 파일에 적용하는 UseCase.
+/// 파일 변경 충돌 감지와 백업 생성을 포함한다.
+/// </summary>
 public class ApplyPatchUseCase
 {
     private readonly IAnalysisRepository _repository;
@@ -18,6 +22,13 @@ public class ApplyPatchUseCase
         _fileSystemService = fileSystemService;
     }
 
+    /// <summary>
+    /// 지정된 수정안을 대상 파일에 적용한다.
+    /// </summary>
+    /// <param name="request">수정안 적용 요청.</param>
+    /// <returns>적용 결과 (성공 여부, 백업 경로).</returns>
+    /// <exception cref="InvalidOperationException">분석이 미완료이거나 파일이 변경된 경우.</exception>
+    /// <exception cref="ArgumentException">PatchIndex가 범위를 벗어난 경우.</exception>
     public async Task<ApplyPatchResponse> ExecuteAsync(ApplyPatchRequest request)
     {
         var record = await _repository.GetByIdAsync(request.AnalysisId)

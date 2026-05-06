@@ -11,6 +11,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
+/// <summary>
+/// WPF 애플리케이션 진입점.
+/// API 서버 프로세스 관리, Serilog 초기화, DI 컨테이너 구성, 전역 예외 처리를 수행한다.
+/// </summary>
 public partial class App : Application
 {
     public static IServiceProvider Services { get; private set; } = null!;
@@ -35,12 +39,7 @@ public partial class App : Application
         var apiStarted = await StartApiServerAsync(apiBaseUrl);
         if (!apiStarted)
         {
-            Log.Error("API 서버 시작 실패 — 앱을 종료합니다.");
-            MessageBox.Show(
-                "API 서버를 시작할 수 없습니다.\nlogs 폴더에서 상세 로그를 확인하세요.",
-                "DevPilot Agent", MessageBoxButton.OK, MessageBoxImage.Error);
-            Shutdown(1);
-            return;
+            Log.Warning("API 서버 시작 실패 — UI만 표시합니다.");
         }
 
         var services = new ServiceCollection();
@@ -52,6 +51,7 @@ public partial class App : Application
 #endif
 
         // Blazor 서비스
+        services.AddSingleton<MarkdownService>();
         services.AddSingleton<AppStateService>();
         services.AddSingleton(new AnalysisHubService($"{apiBaseUrl}{hubPath}"));
         services.AddHttpClient<AnalysisApiService>(client =>
@@ -61,6 +61,7 @@ public partial class App : Application
         });
 
         // WPF 서비스
+        services.AddSingleton<RecentProjectsService>();
         services.AddTransient<IFolderBrowserService, FolderBrowserService>();
         services.AddTransient<MainViewModel>();
         services.AddTransient<MainWindow>();
@@ -69,6 +70,11 @@ public partial class App : Application
 
         var mainWindow = Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
+
+        if (mainWindow.DataContext is MainViewModel viewModel)
+        {
+            viewModel.SetApiConnected(apiStarted);
+        }
 
         Log.Information("MainWindow 표시 완료");
     }

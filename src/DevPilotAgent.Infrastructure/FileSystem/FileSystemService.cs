@@ -4,6 +4,10 @@ using DevPilotAgent.Application.Interfaces;
 using DevPilotAgent.Shared.Constants;
 using Microsoft.Extensions.Logging;
 
+/// <summary>
+/// <see cref="IFileSystemService"/> 구현체.
+/// 파일 검색, 읽기, 패치 적용, 백업 관리를 수행한다.
+/// </summary>
 public class FileSystemService : IFileSystemService
 {
     private readonly ILogger<FileSystemService> _logger;
@@ -13,6 +17,7 @@ public class FileSystemService : IFileSystemService
         _logger = logger;
     }
 
+    /// <inheritdoc/>
     public async Task<List<string>> SearchFilesAsync(string folderPath, List<string> keywords, CancellationToken ct = default)
     {
         var results = new List<(string Path, int Score)>();
@@ -100,6 +105,7 @@ public class FileSystemService : IFileSystemService
         return score;
     }
 
+    /// <inheritdoc/>
     public async Task<string> ReadFileAsync(string filePath, CancellationToken ct = default)
     {
         var fileInfo = new FileInfo(filePath);
@@ -117,6 +123,7 @@ public class FileSystemService : IFileSystemService
         return await File.ReadAllTextAsync(filePath, ct);
     }
 
+    /// <inheritdoc/>
     public async Task<Dictionary<string, string>> ReadMultipleFilesAsync(List<string> filePaths, CancellationToken ct = default)
     {
         var result = new Dictionary<string, string>();
@@ -140,6 +147,7 @@ public class FileSystemService : IFileSystemService
         return result;
     }
 
+    /// <inheritdoc/>
     public async Task<string> ApplyPatchAsync(string targetFilePath, string modifiedContent, string projectFolderPath, DateTime expectedLastModifiedUtc)
     {
         if (!IsPathWithinFolder(targetFilePath, projectFolderPath))
@@ -163,6 +171,7 @@ public class FileSystemService : IFileSystemService
         return backupPath;
     }
 
+    /// <inheritdoc/>
     public bool ValidateFolderPath(string folderPath)
     {
         if (string.IsNullOrWhiteSpace(folderPath))
@@ -174,6 +183,7 @@ public class FileSystemService : IFileSystemService
         return Directory.Exists(folderPath);
     }
 
+    /// <inheritdoc/>
     public bool IsPathWithinFolder(string filePath, string folderPath)
     {
         var fullFilePath = Path.GetFullPath(filePath);
@@ -185,6 +195,7 @@ public class FileSystemService : IFileSystemService
         return fullFilePath.StartsWith(fullFolderPath, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <inheritdoc/>
     public void CleanupOldBackups(string targetFilePath, int maxBackups = 5)
     {
         var directory = Path.GetDirectoryName(targetFilePath);

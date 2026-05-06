@@ -1,107 +1,184 @@
 @using System.Net.Http
+@using Microsoft.AspNetCore.Components
 @using DevPilotAgent.App.Components.Services
+@using DevPilotAgent.Shared.DTOs
 @inject AnalysisApiService ApiService
 @inject AnalysisHubService HubService
 @inject AppStateService AppState
+@inject MarkdownService Markdown
 @implements IDisposable
 
 <div class="chat-panel">
-    <!-- Input Section -->
-    <div class="input-section">
-        <textarea @bind="_errorLog" placeholder="에러 로그를 붙여넣으세요..." rows="4"
-                  disabled="@_isAnalyzing"></textarea>
-        <div class="input-actions">
-            @if (string.IsNullOrWhiteSpace(AppState.ProjectFolderPath))
-            {
-                <span class="warning-text">먼저 프로젝트 폴더를 선택하세요</span>
-            }
-            @if (_isAnalyzing)
-            {
-                <button class="btn btn-cancel" @onclick="CancelAnalysis">취소</button>
-                <span class="progress-text">단계 @_currentStep/7 진행 중</span>
-            }
-            else
-            {
-                <button class="btn btn-primary" @onclick="StartAnalysis"
-                        disabled="@(string.IsNullOrWhiteSpace(AppState.ProjectFolderPath) || string.IsNullOrWhiteSpace(_errorLog))">
-                    Analyze
-                </button>
-            }
-        </div>
-    </div>
-
-    <!-- Chat Messages -->
+    <!-- Chat Messages Area -->
     <div class="chat-messages" id="chatMessages">
         @if (_messages.Count == 0 && !_isAnalyzing)
         {
-            <div class="empty-state">에러 로그를 입력하고 Analyze 버튼을 클릭하세요</div>
+            <div class="empty-state">
+                <div class="empty-icon">&#x1F916;</div>
+                <div class="empty-title">DevPilot Agent</div>
+                <div class="empty-subtitle">에러 로그를 붙여넣고 분석을 요청하세요</div>
+            </div>
         }
         @foreach (var msg in _messages)
         {
-            <div class="chat-message @msg.Role">
-                <span class="message-content">@msg.Content</span>
+            <div class="chat-bubble @GetBubbleClass(msg.Type)">
+                @if (msg.Type == ChatMessageType.Step)
+                {
+                    <div class="step-indicator">
+                        <span class="step-badge">@msg.StepNumber/@msg.TotalSteps</span>
+                        <span class="step-text">@msg.Content</span>
+                    </div>
+                }
+                else if (msg.Type == ChatMessageType.User)
+                {
+                    <div class="bubble-content user-bubble">
+                        <pre class="user-text">@msg.Content</pre>
+                    </div>
+                }
+                else if (msg.Type == ChatMessageType.Agent)
+                {
+                    <div class="bubble-content markdown-body">@((MarkupString)Markdown.ToHtml(msg.Content))</div>
+                }
+                else
+                {
+                    <div class="bubble-content">@msg.Content</div>
+                }
             </div>
         }
         @foreach (var (stepNumber, text) in _streamingTexts)
         {
             @if (!string.IsNullOrEmpty(text))
             {
-                <div class="chat-message streaming">
-                    <pre class="streaming-text">@text<span class="cursor">|</span></pre>
+                <div class="chat-bubble bubble-agent">
+                    <div class="bubble-content markdown-body streaming-content">
+                        @((MarkupString)Markdown.ToHtml(text))
+                        <span class="cursor">|</span>
+                    </div>
                 </div>
             }
         }
+    </div>
+
+    <!-- Input Area (Bottom) -->
+    <div class="chat-input-area">
+        @if (string.IsNullOrWhiteSpace(AppState.ProjectFolderPath))
+        {
+            <div class="input-warning">
+                <span class="warning-text">프로젝트 폴더를 먼저 선택하세요</span>
+            </div>
+        }
+        <div class="input-row">
+            <textarea @bind="_inputText"
+                      @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      placeholder="에러 로그를 붙여넣거나 메시지를 입력하세요..."
+                      rows="3"
+                      disabled="@_isAnalyzing"
+                      class="chat-textarea"></textarea>
+            <div class="input-buttons">
+                @if (_isAnalyzing)
+                {
+                    <button class="btn btn-cancel btn-round" @onclick="CancelAnalysis" title="취소">
+                        &#x25A0;
+                    </button>
+                    <span class="progress-text">@_currentStep/7</span>
+                }
+                else
+                {
+                    <button class="btn btn-primary btn-send" @onclick="SendMessage"
+                            disabled="@(string.IsNullOrWhiteSpace(AppState.ProjectFolderPath) || string.IsNullOrWhiteSpace(_inputText))"
+                            title="전송 (Enter)">
+                        &#x27A4;
+                    </button>
+                }
+            </div>
+        </div>
+        <div class="input-hint">
+            <span>Enter 전송 | Shift+Enter 줄바꿈</span>
+        </div>
     </div>
 </div>
 
 @code {
     [Parameter] public EventCallback<AnalysisResponse?> OnAnalysisCompleted { get; set; }
 
-    private string _errorLog = string.Empty;
+    private string _inputText = string.Empty;
     private bool _isAnalyzing;
     private int _currentStep;
     private Guid? _currentAnalysisId;
-    private readonly List<ChatMessageModel> _messages = [];
+    private readonly List<ChatMessageDto> _messages = [];
     private readonly Dictionary<int, string> _streamingTexts = [];
 
     protected override async Task OnInitializedAsync()
     {
-        await HubService.ConnectAsync();
+        AppState.OnProjectFolderChanged += HandleFolderChanged;
         HubService.OnAgentStepUpdate += HandleStepUpdate;
         HubService.OnStreamChunk += HandleStreamChunk;
         HubService.OnAnalysisCompleted += HandleCompleted;
-    }
-
-    private async Task StartAnalysis()
-    {
-        if (string.IsNullOrWhiteSpace(AppState.ProjectFolderPath) || string.IsNullOrWhiteSpace(_errorLog))
-            return;
-
-        _isAnalyzing = true;
-        _currentStep = 0;
-        _messages.Clear();
-        _streamingTexts.Clear();
 
         try
         {
-            var request = new AnalysisRequest(AppState.ProjectFolderPath, _errorLog);
+            await HubService.ConnectAsync();
+        }
+        catch
+        {
+            // API 서버 미실행 시 연결 실패 — UI는 정상 표시
+        }
+    }
+
+    private void HandleFolderChanged(string _)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(AppState.ProjectFolderPath) || string.IsNullOrWhiteSpace(_inputText))
+            return;
+
+        var userText = _inputText.Trim();
+        _inputText = string.Empty;
+
+        _messages.Add(new ChatMessageDto(ChatMessageType.User, userText, DateTime.Now));
+
+        await StartAnalysis(userText);
+    }
+
+    private async Task StartAnalysis(string errorLog)
+    {
+        _isAnalyzing = true;
+        _currentStep = 0;
+        _streamingTexts.Clear();
+
+        _messages.Add(new ChatMessageDto(ChatMessageType.System, "분석을 시작합니다...", DateTime.Now));
+        StateHasChanged();
+
+        try
+        {
+            var request = new AnalysisRequest(AppState.ProjectFolderPath, errorLog);
             var started = await ApiService.StartAnalysisAsync(request);
             _currentAnalysisId = started.AnalysisId;
 
             await HubService.JoinAnalysisAsync(started.AnalysisId);
             await ApiService.TriggerAnalysisAsync(started.AnalysisId, request);
-
-            _messages.Add(new ChatMessageModel("system", "분석을 시작합니다..."));
         }
         catch (HttpRequestException ex)
         {
             _isAnalyzing = false;
-            _messages.Add(new ChatMessageModel("error", $"API 서버 연결 실패: {ex.Message}\nAPI 서버가 실행 중인지 확인하세요."));
+            _messages.Add(new ChatMessageDto(ChatMessageType.Error, $"API 서버 연결 실패: {ex.Message}", DateTime.Now));
         }
         catch (Exception ex)
         {
             _isAnalyzing = false;
-            _messages.Add(new ChatMessageModel("error", $"분석 시작 실패: {ex.Message}"));
+            _messages.Add(new ChatMessageDto(ChatMessageType.Error, $"분석 시작 실패: {ex.Message}", DateTime.Now));
         }
         StateHasChanged();
     }
@@ -112,7 +189,7 @@
         {
             await ApiService.CancelAnalysisAsync(_currentAnalysisId.Value);
             _isAnalyzing = false;
-            _messages.Add(new ChatMessageModel("system", "분석이 취소되었습니다."));
+            _messages.Add(new ChatMessageDto(ChatMessageType.System, "분석이 취소되었습니다.", DateTime.Now));
             StateHasChanged();
         }
     }
@@ -126,13 +203,16 @@
             if (msg.Status == "Started")
             {
                 _currentStep = msg.StepNumber;
-                _messages.Add(new ChatMessageModel("agent", $"[Step {msg.StepNumber}] {msg.Message}"));
+                _messages.Add(new ChatMessageDto(
+                    ChatMessageType.Step, msg.Message, DateTime.Now,
+                    msg.StepName, msg.StepNumber, 7));
                 _streamingTexts[msg.StepNumber] = "";
             }
             else if (msg.Status == "Completed")
             {
                 _streamingTexts.Remove(msg.StepNumber);
-                _messages.Add(new ChatMessageModel("agent-done", $"[Step {msg.StepNumber}] {msg.Message}"));
+                _messages.Add(new ChatMessageDto(
+                    ChatMessageType.Agent, $"[완료] {msg.Message}", DateTime.Now));
             }
             StateHasChanged();
         });
@@ -165,13 +245,15 @@
 
             if (msg.Success)
             {
-                _messages.Add(new ChatMessageModel("system", "분석이 완료되었습니다."));
+                _messages.Add(new ChatMessageDto(
+                    ChatMessageType.Agent, "분석이 완료되었습니다. 우측 패널에서 결과를 확인하세요.", DateTime.Now));
                 var result = await ApiService.GetAnalysisAsync(msg.AnalysisId);
                 await OnAnalysisCompleted.InvokeAsync(result);
             }
             else
             {
-                _messages.Add(new ChatMessageModel("error", $"분석 실패: {msg.ErrorMessage}"));
+                _messages.Add(new ChatMessageDto(
+                    ChatMessageType.Error, $"분석 실패: {msg.ErrorMessage}", DateTime.Now));
             }
 
             if (_currentAnalysisId.HasValue)
@@ -181,12 +263,21 @@
         });
     }
 
+    private static string GetBubbleClass(ChatMessageType type) => type switch
+    {
+        ChatMessageType.User => "bubble-user",
+        ChatMessageType.Agent => "bubble-agent",
+        ChatMessageType.System => "bubble-system",
+        ChatMessageType.Step => "bubble-step",
+        ChatMessageType.Error => "bubble-error",
+        _ => "bubble-agent"
+    };
+
     public void Dispose()
     {
+        AppState.OnProjectFolderChanged -= HandleFolderChanged;
         HubService.OnAgentStepUpdate -= HandleStepUpdate;
         HubService.OnStreamChunk -= HandleStreamChunk;
         HubService.OnAnalysisCompleted -= HandleCompleted;
     }
-
-    private record ChatMessageModel(string Role, string Content);
 }

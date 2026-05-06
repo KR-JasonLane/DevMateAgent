@@ -6,6 +6,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 
+/// <summary>
+/// 에러 로그에서 핵심 키워드(파일명, 클래스명, 예외 타입 등)를 LLM으로 추출하는 플러그인.
+/// Singleton으로 등록되며 상태를 보유하지 않는다.
+/// </summary>
 public class ErrorParserPlugin
 {
     private readonly Kernel _kernel;
@@ -17,6 +21,12 @@ public class ErrorParserPlugin
         _logger = logger;
     }
 
+    /// <summary>
+    /// 에러 로그에서 키워드를 추출한다.
+    /// </summary>
+    /// <param name="errorLog">분석할 에러 로그 원문.</param>
+    /// <param name="ct">취소 토큰.</param>
+    /// <returns>추출된 키워드 문자열 목록.</returns>
     public async Task<List<string>> ExtractKeywordsAsync(string errorLog, CancellationToken ct = default)
     {
         var chatService = _kernel.GetRequiredService<IChatCompletionService>();

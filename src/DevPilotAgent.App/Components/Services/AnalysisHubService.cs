@@ -4,6 +4,10 @@ using DevPilotAgent.Shared.Constants;
 using DevPilotAgent.Shared.DTOs;
 using Microsoft.AspNetCore.SignalR.Client;
 
+/// <summary>
+/// SignalR Hub에 연결하여 분석 실시간 스트리밍 이벤트를 수신하는 서비스.
+/// 자동 재연결 시 분석 그룹에 자동으로 재참가한다.
+/// </summary>
 public class AnalysisHubService : IAsyncDisposable
 {
     private HubConnection? _connection;

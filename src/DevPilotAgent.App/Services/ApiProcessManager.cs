@@ -4,6 +4,10 @@ using System.Diagnostics;
 using System.Net.Http;
 using Serilog;
 
+/// <summary>
+/// API 서버 프로세스의 생명주기(시작, 헬스체크, 종료)를 관리한다.
+/// WPF App.OnStartup에서 시작하고 App.OnExit에서 종료한다.
+/// </summary>
 public class ApiProcessManager : IDisposable
 {
     private Process? _apiProcess;
@@ -17,6 +21,11 @@ public class ApiProcessManager : IDisposable
         _healthUrl = $"{baseUrl}/health";
     }
 
+    /// <summary>
+    /// API 서버 프로세스를 시작하고 헬스체크가 성공할 때까지 대기한다.
+    /// </summary>
+    /// <param name="ct">취소 토큰.</param>
+    /// <returns>헬스체크 성공 시 true, 타임아웃 시 false.</returns>
     public async Task<bool> StartAsync(CancellationToken ct = default)
     {
         Log.Information("API 서버 시작 중... 경로: {Path}", _apiProjectPath);
@@ -57,6 +66,9 @@ public class ApiProcessManager : IDisposable
         return await WaitForHealthyAsync(TimeSpan.FromSeconds(30), ct);
     }
 
+    /// <summary>
+    /// API 서버 프로세스 트리를 종료한다.
+    /// </summary>
     public void Stop()
     {
         if (_apiProcess is null || _apiProcess.HasExited)

@@ -36,15 +36,46 @@ Specification: `DevPilotAgent-Spec.md`
 
 ---
 
-## 3. Mandatory Architectural Style
+## 3. Mandatory Planning Before Implementation
+
+Every feature, system, or significant change must have a written plan **before any code is written**. Plans are stored in the `Plan/` folder as Markdown files.
+
+**Plan file convention:**
+
+| Subject | Plan file |
+|---------|-----------|
+| SignalR streaming redesign | `Plan/SignalRStreamingPlan.md` |
+| Agent pipeline refactoring | `Plan/AgentPipelineRefactoringPlan.md` |
+
+**Required sections in every plan document:**
+
+| Section | Purpose |
+|---------|---------|
+| **Analysis** | Problem definition, current state assessment, constraints, and requirements gathering. |
+| **Design** | Architecture decisions, class/interface responsibilities, layer assignments, pattern selection, dependency flow. |
+| **Implementation Plan** | Step-by-step breakdown of code changes, file locations, creation order, and integration points. |
+| **Test Plan** | Testing strategy per layer, test frameworks, and organization. |
+| **Test Cases** | Concrete scenarios with expected inputs, expected outputs, and edge cases. |
+
+**Rules:**
+
+- No implementation may begin without an approved plan document.
+- Plans must be reviewed and updated as implementation progresses.
+- If requirements change mid-implementation, the plan must be revised first, then code follows.
+- A plan that lacks any of the five required sections is considered incomplete.
+- Plans are living documents: mark completed steps and record deviations with rationale.
+
+---
+
+## 4. Mandatory Architectural Style
 
 All code must follow a layered architecture.
 
 ```
-Presentation  (WPF Views / ViewModels / Blazor Components)
-Application   (UseCases / Service Interfaces)
-Domain        (Entities / ValueObjects / Enums)
-Infrastructure (EF Core / FileSystem / Semantic Kernel Plugins / Agent)
+Presentation    (WPF Views / ViewModels / Blazor Components)
+Application     (UseCases / Service Interfaces)
+Domain          (Entities / ValueObjects / Enums)
+Infrastructure  (EF Core / FileSystem / Semantic Kernel Plugins / Agent)
 ```
 
 ### Dependency Rules
@@ -81,7 +112,7 @@ Infrastructure implements interfaces defined by Application.
 
 ---
 
-## 4. WPF + Blazor Hybrid Rules
+## 5. WPF + Blazor Hybrid Rules
 
 ### WPF (Shell)
 
@@ -117,9 +148,9 @@ Forbidden:
 
 ---
 
-## 5. MVVM Pattern (WPF Only)
+## 6. MVVM Pattern (WPF Only)
 
-WPF views must follow MVVM using CommunityToolkit.Mvvm.
+WPF views must strictly follow MVVM using CommunityToolkit.Mvvm.
 
 ### View
 
@@ -130,9 +161,7 @@ WPF views must follow MVVM using CommunityToolkit.Mvvm.
 
 ### ViewModel
 
-- Expose state and commands to the View.
-- Call Application layer or shared services.
-- Must never contain business rules.
+ViewModel acts as the Presentation Coordinator.
 
 Allowed: presentation formatting, UI state management, command orchestration.
 
@@ -140,7 +169,7 @@ Forbidden: business calculations, persistence logic, domain invariants.
 
 ---
 
-## 6. Application Layer
+## 7. Application Layer
 
 The Application layer defines UseCases.
 
@@ -166,12 +195,13 @@ Application must remain UI-agnostic and framework-agnostic.
 
 ---
 
-## 7. Domain Layer
+## 8. Domain Layer
 
 The Domain layer represents core business rules.
 
 It contains:
 - Entities (`AnalysisRecord`)
+- Value Objects
 - Enums (`AnalysisStatus`)
 
 Domain rules must be framework independent.
@@ -186,7 +216,7 @@ Domain must remain pure logic.
 
 ---
 
-## 8. Infrastructure Layer
+## 9. Infrastructure Layer
 
 Infrastructure implements external system access.
 
@@ -204,7 +234,36 @@ Infrastructure must never reference Api project types (no `AnalysisHub`, no `IHu
 
 ---
 
-## 9. SignalR Rules
+## 10. Domain Modeling Rules
+
+Primitive obsession is discouraged.
+
+Domain concepts should be represented as Value Objects when they carry meaning or invariants.
+
+Bad:
+```csharp
+string errorMessage;
+string filePath;
+int severity;
+```
+
+Better:
+```csharp
+ErrorMessage errorMessage;
+ProjectPath filePath;
+Severity severity;
+```
+
+Value Objects must:
+- Be immutable
+- Validate themselves in the constructor
+- Represent domain meaning
+
+However, simple identifier types (`Guid id`) and temporary calculation values may remain primitive.
+
+---
+
+## 11. SignalR Rules
 
 ### Message Flow
 
@@ -233,7 +292,7 @@ Configure `MaximumReceiveMessageSize = 256KB` for large DataJson payloads.
 
 ---
 
-## 10. Semantic Kernel Plugin Rules
+## 12. Semantic Kernel Plugin Rules
 
 ### Plugin Design
 
@@ -255,7 +314,7 @@ Configure `MaximumReceiveMessageSize = 256KB` for large DataJson payloads.
 
 ---
 
-## 11. Dependency Injection
+## 13. Dependency Injection
 
 Dependency injection is mandatory.
 
@@ -266,6 +325,8 @@ Forbidden patterns:
 - `new Service()`
 - Service Locator
 - Global static state (except `App.Services` for BlazorWebView bootstrap)
+
+All dependencies must be resolved through DI containers.
 
 ### Lifecycle Guidelines
 
@@ -279,7 +340,7 @@ Background tasks (`Task.Run`) must create their own `IServiceScope` via `IServic
 
 ---
 
-## 12. Database Rules
+## 14. Database Rules
 
 ### SQLite Configuration
 
@@ -294,7 +355,7 @@ Background tasks (`Task.Run`) must create their own `IServiceScope` via `IServic
 
 ---
 
-## 13. File System Security
+## 15. File System Security
 
 - Path Traversal prevention: `Path.GetFullPath()` then verify path starts with `ProjectFolderPath`.
 - Reject symbolic links and UNC paths (`\\server\share`).
@@ -304,7 +365,7 @@ Background tasks (`Task.Run`) must create their own `IServiceScope` via `IServic
 
 ---
 
-## 14. Error Handling & Resilience
+## 16. Error Handling & Resilience
 
 ### API Key Validation
 
@@ -330,7 +391,7 @@ Strip markdown code blocks and retry. On complete failure, preserve raw text.
 
 ---
 
-## 15. DTO Usage
+## 17. DTO Usage
 
 DTOs exist only for data transfer.
 
@@ -343,38 +404,19 @@ Rules:
 
 ---
 
-## 16. Unit Testing Rules
-
-Architecture must always support testing.
-
-| Layer | Testing | Tools |
-|-------|---------|-------|
-| Domain | 100% unit testable | xUnit |
-| Application | UseCase behavior tested with mocks | xUnit + Moq |
-| Infrastructure | Integration tests (real files, SQLite InMemory) | xUnit |
-| Api | Controller endpoint tests | xUnit + WebApplicationFactory |
-| SignalR | Hub message delivery tests | xUnit + SignalR test client |
-| WPF/Blazor | Manual testing | Manual |
-
-Testing Tools: xUnit, Moq, FluentAssertions.
-
-If code becomes difficult to test, the design must be refactored.
-
----
-
-## 17. CORS Configuration
+## 18. CORS Configuration
 
 Never use `AllowAnyOrigin()` with SignalR. It causes a runtime exception due to credentials conflict.
 
 Must use:
-```
+```csharp
 WithOrigins("https://0.0.0.0", "app://localhost", "http://localhost:5000")
 .AllowCredentials()
 ```
 
 ---
 
-## 18. API Server Process Management
+## 19. API Server Process Management
 
 WPF App manages the API server lifecycle:
 
@@ -386,7 +428,7 @@ The API must never be assumed to be running. Handle connection failures graceful
 
 ---
 
-## 19. Blazor Component Rules
+## 20. Blazor Component Rules
 
 ### Thread Safety
 
@@ -409,7 +451,117 @@ RootCauseTab, PrDescriptionTab, TestScenarioTab must include a clipboard copy bu
 
 ---
 
-## 20. Architectural Smells (Forbidden)
+## 21. Theme-Aware UI Development
+
+All UI work must consider both Light and Dark themes at all times.
+
+### WPF Rules
+
+- Never use hardcoded colors (e.g., `#FFFFFF`, `Brushes.Black`) in XAML or code-behind. Always use `DynamicResource` with theme brushes.
+- Use `DynamicResource` instead of `StaticResource` for any brush or color that must respond to runtime theme changes.
+- Custom colors or accent overrides must be defined as theme-aware resources in a ResourceDictionary, not inline.
+
+### Blazor Rules
+
+- Never use hardcoded colors in components or styles. Always use CSS variables.
+- Use CSS variables (`var(--color-*)`) for any color that must respond to theme changes.
+- Opacity and contrast must remain readable in both themes.
+
+### General
+
+- When creating new Views or Components, verify visual correctness in both Light and Dark modes.
+
+---
+
+## 22. Code Documentation (Mandatory)
+
+All public and internal members must have XML documentation comments. Single-line comments (`//`) are forbidden as documentation for public or internal members.
+
+### XML Documentation Comments
+
+**Forbidden:**
+```csharp
+// Analyzes the error log and returns root cause
+public async Task<AnalysisRecord> ExecuteAsync(AnalysisRequest request) { ... }
+```
+
+**Required:**
+```csharp
+/// <summary>
+/// Analyzes the error log and returns root cause analysis with fix suggestions.
+/// </summary>
+/// <param name="request">The analysis request containing error log and project path.</param>
+/// <returns>The completed analysis record with all pipeline results.</returns>
+/// <exception cref="InvalidOperationException">Thrown when concurrent analysis is already running.</exception>
+public async Task<AnalysisRecord> ExecuteAsync(AnalysisRequest request) { ... }
+```
+
+**Rules:**
+- `<summary>` is mandatory on every member (class, interface, method, property, field, event).
+- `<param>` is required for every parameter.
+- `<returns>` is required for every non-void method.
+- `<exception>` should be used when a method explicitly throws exceptions.
+- Empty summary tags are a violation — every summary must contain a meaningful description.
+- Documentation must explain intent, not restate the code.
+
+### Scope
+
+| Target | Required |
+|--------|----------|
+| Public classes, interfaces, records, enums | Always |
+| Public methods and properties | Always |
+| Internal classes and methods | Always |
+| Private methods | Only when logic is non-obvious |
+| DTOs (Shared project) | Summary on class and each property |
+| Blazor code-behind (.razor.cs) | Public methods and injected services |
+
+---
+
+## 23. Unit Testing Rules
+
+Architecture must always support testing.
+
+| Layer | Testing | Tools |
+|-------|---------|-------|
+| Domain | 100% unit testable | xUnit |
+| Application | UseCase behavior tested with mocks | xUnit + Moq |
+| Infrastructure | Integration tests (real files, SQLite InMemory) | xUnit |
+| Api | Controller endpoint tests | xUnit + WebApplicationFactory |
+| SignalR | Hub message delivery tests | xUnit + SignalR test client |
+| WPF/Blazor | Manual testing | Manual |
+
+Testing Tools: xUnit, Moq, FluentAssertions.
+
+**Test Maintenance**
+
+- After every implementation or modification, review existing test code and update test cases to reflect the changes.
+- New public behavior requires new test cases; modified behavior requires updated test cases.
+
+**Design Rule**
+
+- If code becomes difficult to test, the design must be refactored.
+
+---
+
+## 24. Design Pattern Usage
+
+Design patterns must be actively used when appropriate.
+
+Common patterns for this project:
+
+- **MVVM**: WPF presentation coordination
+- **Repository**: Data access abstraction
+- **Command**: All WPF UI actions
+- **Strategy**: Plugin selection, analysis step execution
+- **Observer**: SignalR event streaming, AppStateService notifications
+- **Factory**: Creating domain objects with validation
+- **Dependency Injection**: All layers
+
+Pattern usage must improve maintainability, not add unnecessary complexity.
+
+---
+
+## 25. Architectural Smells (Forbidden)
 
 The following are considered structural violations:
 
@@ -427,7 +579,7 @@ The following are considered structural violations:
 
 ---
 
-## 21. Build Warning Policy
+## 26. Build Warning Policy
 
 Build warnings must never be ignored. All warnings must be resolved before code is considered complete.
 
@@ -440,7 +592,7 @@ Nullable reference type warnings require special attention:
 
 ---
 
-## 22. One Class Per File
+## 27. One Class Per File
 
 Every class, record, struct, enum, and interface must be defined in its own dedicated `.cs` file.
 
@@ -451,7 +603,7 @@ Rules:
 
 ---
 
-## 23. Git Commit Rules
+## 28. Git Commit Rules
 
 Commit messages must follow the Conventional Commits format in Korean.
 
@@ -475,7 +627,7 @@ Rules:
 
 ---
 
-## 24. Final Rule
+## 29. Final Rule
 
 Correct architecture is mandatory.
 

@@ -3,18 +3,41 @@
         <ChatPanel OnAnalysisCompleted="HandleAnalysisCompleted" />
     </div>
     <div class="right-panel">
-        <ResultTabs Analysis="_currentAnalysis" />
-        <HistoryPanel @ref="_historyPanel" OnAnalysisSelected="HandleAnalysisSelected" />
+        <!-- Context Panel Header with Tabs -->
+        <div class="context-tabs">
+            <button class="context-tab @(_contextTab == "results" ? "active" : "")"
+                    @onclick='() => _contextTab = "results"'>
+                분석 결과
+            </button>
+            <button class="context-tab @(_contextTab == "history" ? "active" : "")"
+                    @onclick='() => _contextTab = "history"'>
+                히스토리
+            </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="context-content">
+            @if (_contextTab == "results")
+            {
+                <ResultTabs Analysis="_currentAnalysis" />
+            }
+            else if (_contextTab == "history")
+            {
+                <HistoryPanel @ref="_historyPanel" OnAnalysisSelected="HandleAnalysisSelected" />
+            }
+        </div>
     </div>
 </div>
 
 @code {
     private AnalysisResponse? _currentAnalysis;
     private HistoryPanel? _historyPanel;
+    private string _contextTab = "results";
 
     private async Task HandleAnalysisCompleted(AnalysisResponse? analysis)
     {
         _currentAnalysis = analysis;
+        _contextTab = "results";
         if (_historyPanel is not null)
             await _historyPanel.LoadHistory();
         StateHasChanged();
@@ -23,6 +46,7 @@
     private Task HandleAnalysisSelected(AnalysisResponse? analysis)
     {
         _currentAnalysis = analysis;
+        _contextTab = "results";
         StateHasChanged();
         return Task.CompletedTask;
     }

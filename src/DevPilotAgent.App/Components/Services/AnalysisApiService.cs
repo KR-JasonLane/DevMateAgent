@@ -5,6 +5,10 @@ using System.Net.Http.Json;
 using DevPilotAgent.Shared.Requests;
 using DevPilotAgent.Shared.Responses;
 
+/// <summary>
+/// API 서버와 HTTP 통신을 수행하는 클라이언트 서비스.
+/// Blazor 컴포넌트에서 분석 생성, 실행, 조회, 수정안 적용 등을 호출한다.
+/// </summary>
 public class AnalysisApiService
 {
     private readonly HttpClient _httpClient;

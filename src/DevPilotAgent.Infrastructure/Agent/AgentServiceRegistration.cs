@@ -7,8 +7,19 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
 
+/// <summary>
+/// Semantic Kernel과 Agent 플러그인의 DI 등록.
+/// OpenAI API 키가 없으면 즉시 실패한다 (fail-fast).
+/// </summary>
 public static class AgentServiceRegistration
 {
+    /// <summary>
+    /// Semantic Kernel, 플러그인, 오케스트레이터를 DI 컨테이너에 등록한다.
+    /// </summary>
+    /// <param name="services">서비스 컬렉션.</param>
+    /// <param name="configuration">앱 설정 (OpenAI:ApiKey 필수).</param>
+    /// <returns>체이닝을 위한 서비스 컬렉션.</returns>
+    /// <exception cref="InvalidOperationException">API 키가 설정되지 않은 경우.</exception>
     public static IServiceCollection AddAgentServices(this IServiceCollection services, IConfiguration configuration)
     {
         var apiKey = configuration["OpenAI:ApiKey"];

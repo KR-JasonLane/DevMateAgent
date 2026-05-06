@@ -10,6 +10,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 
+/// <summary>
+/// LLM을 활용하여 근본 원인 분석, 수정안 생성, 테스트 시나리오, PR 설명문을 생성하는 플러그인.
+/// 모든 LLM 응답은 스트리밍으로 처리되며 버퍼링을 통해 SignalR로 전달된다.
+/// </summary>
 public class CodeAnalyzerPlugin
 {
     private readonly Kernel _kernel;
@@ -21,6 +25,9 @@ public class CodeAnalyzerPlugin
         _logger = logger;
     }
 
+    /// <summary>
+    /// 에러 로그와 소스 코드를 분석하여 근본 원인을 스트리밍으로 생성한다.
+    /// </summary>
     public async Task<string> AnalyzeRootCauseStreamingAsync(
         string errorLog,
         Dictionary<string, string> fileContents,
@@ -43,6 +50,9 @@ public class CodeAnalyzerPlugin
         return await StreamResponseAsync(chatHistory, analysisId, stepNumber, AgentStepNames.AnalyzeRootCause, reporter, ct);
     }
 
+    /// <summary>
+    /// 근본 원인 분석을 바탕으로 코드 수정안을 스트리밍으로 생성한다.
+    /// </summary>
     public async Task<List<FixSuggestion>> GenerateFixSuggestionsStreamingAsync(
         string errorLog,
         string rootCauseAnalysis,
@@ -76,6 +86,9 @@ public class CodeAnalyzerPlugin
         return ParseFixSuggestions(responseText);
     }
 
+    /// <summary>
+    /// 원인 분석과 수정안을 바탕으로 테스트 시나리오를 스트리밍으로 생성한다.
+    /// </summary>
     public async Task<List<string>> GenerateTestScenariosStreamingAsync(
         string rootCauseAnalysis,
         List<FixSuggestion> fixSuggestions,
@@ -101,6 +114,9 @@ public class CodeAnalyzerPlugin
         return ParseJsonStringArray(responseText);
     }
 
+    /// <summary>
+    /// 분석 결과 전체를 바탕으로 PR 설명문 초안을 스트리밍으로 생성한다.
+    /// </summary>
     public async Task<string> GeneratePrDescriptionStreamingAsync(
         string rootCauseAnalysis,
         List<FixSuggestion> fixSuggestions,

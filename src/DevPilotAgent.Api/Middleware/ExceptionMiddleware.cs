@@ -3,6 +3,10 @@ namespace DevPilotAgent.Api.Middleware;
 using System.Net;
 using System.Text.Json;
 
+/// <summary>
+/// 전역 예외 처리 미들웨어.
+/// 예외 타입에 따라 적절한 HTTP 상태 코드와 JSON 에러 응답을 반환한다.
+/// </summary>
 public class ExceptionMiddleware
 {
     private readonly RequestDelegate _next;
@@ -16,6 +20,10 @@ public class ExceptionMiddleware
         _environment = environment;
     }
 
+    /// <summary>
+    /// 요청 파이프라인에서 발생하는 예외를 잡아 구조화된 JSON 에러 응답으로 변환한다.
+    /// </summary>
+    /// <param name="context">HTTP 컨텍스트.</param>
     public async Task InvokeAsync(HttpContext context)
     {
         try

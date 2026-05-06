@@ -8,6 +8,10 @@ using DevPilotAgent.Shared.Constants;
 using DevPilotAgent.Shared.DTOs;
 using Microsoft.Extensions.Logging;
 
+/// <summary>
+/// 7단계 Agent 파이프라인을 순차적으로 실행하는 오케스트레이터.
+/// 각 단계의 시작/완료를 <see cref="IAgentProgressReporter"/>를 통해 보고한다.
+/// </summary>
 public class AgentOrchestrator : IAgentOrchestrator
 {
     private readonly ErrorParserPlugin _errorParser;
@@ -30,6 +34,7 @@ public class AgentOrchestrator : IAgentOrchestrator
         _logger = logger;
     }
 
+    /// <inheritdoc/>
     public async Task<AgentResult> RunAsync(
         string projectFolderPath,
         string errorLog,

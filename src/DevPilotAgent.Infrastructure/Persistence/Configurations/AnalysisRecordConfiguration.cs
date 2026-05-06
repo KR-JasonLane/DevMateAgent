@@ -4,8 +4,13 @@ using DevPilotAgent.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
+/// <summary>
+/// AnalysisRecord 엔티티의 EF Core 매핑 설정.
+/// 테이블명, 필수 필드, 인덱스를 정의한다.
+/// </summary>
 public class AnalysisRecordConfiguration : IEntityTypeConfiguration<AnalysisRecord>
 {
+    /// <inheritdoc/>
     public void Configure(EntityTypeBuilder<AnalysisRecord> builder)
     {
         builder.ToTable("AnalysisRecords");
